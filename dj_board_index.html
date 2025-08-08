@@ -89,7 +89,7 @@
         <main>
             <section id="overview" class="mb-12 bg-white p-6 rounded-xl shadow-md">
                 <h2 class="text-2xl font-bold mb-4 text-slate-800 border-b pb-2">프로젝트 개요</h2>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
                     <div class="bg-slate-50 p-4 rounded-lg">
                         <h3 class="text-lg font-semibold text-slate-500">총 프로젝트 기간</h3>
                         <p id="total-duration" class="text-2xl font-bold text-teal-600"></p>
@@ -102,6 +102,10 @@
                     <div class="bg-slate-50 p-4 rounded-lg">
                         <h3 class="text-lg font-semibold text-slate-500">현재 진행 단계</h3>
                         <p id="current-phase" class="text-2xl font-bold text-teal-600"></p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-slate-500">구현 단계 진행률</h3>
+                        <p id="implementation-progress" class="text-2xl font-bold text-teal-600"></p>
                     </div>
                 </div>
             </section>
@@ -179,6 +183,7 @@
             }
         };
 
+        // 실제 현재 날짜 사용 (자동으로 진행률 반영)
         const today = new Date();
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -203,26 +208,74 @@
             const approxMonths = Math.round(dayDiff / 30);
             document.getElementById('total-duration').textContent = `${approxMonths} 개월`;
 
-            const totalEffort = projectData.details.implementation.modules.reduce((sum, module) => sum + module.effort, 0);
-            const completedEffort = projectData.details.implementation.modules.reduce((sum, module) => sum + (module.effort * module.progress / 100), 0);
-            const overallProgress = Math.round((completedEffort / totalEffort) * 100);
+            // 구현 단계 진행률 계산 (일정 기반)
+            // 구현단계 전체 일정: 2025-08-01 ~ 2026-01-31 (6개월)
+            // 현재 진행된 기간을 기준으로 진행률 계산
+            const implementationStart = new Date('2025-08-01');
+            const implementationEnd = new Date('2026-01-31');
+            const totalImplementationDays = Math.round((implementationEnd - implementationStart) / (1000 * 60 * 60 * 24));
+            
+            // 현재 날짜 기준으로 진행률 계산 (2024년 현재는 0%로 시작)
+            let implementationProgress = 0;
+            if (today >= implementationStart && today <= implementationEnd) {
+                const elapsedDays = Math.round((today - implementationStart) / (1000 * 60 * 60 * 24));
+                implementationProgress = Math.round((elapsedDays / totalImplementationDays) * 100);
+            } else if (today > implementationEnd) {
+                implementationProgress = 100;
+            }
+            
+            document.getElementById('implementation-progress').textContent = `${implementationProgress}%`;
+
+            // 전체 프로젝트 진행률 계산 (모든 단계의 가중 평균)
+            const phaseWeights = {
+                analysis: 0.15,      // 분석 단계: 15%
+                implementation: 0.60, // 구현 단계: 60% (가장 큰 비중)
+                testing: 0.15,       // 시험 단계: 15%
+                deployment: 0.05,    // 전환 단계: 5%
+                operation: 0.05      // 운영 단계: 5%
+            };
+            
+            // 각 단계별 진행률 설정
+            const analysisProgress = 100; // 분석단계 완료
+            const testingProgress = 0;    // 시험단계 미시작
+            const deploymentProgress = 0; // 전환단계 미시작
+            const operationProgress = 0;  // 운영단계 미시작
+            
+            let overallProgress = (analysisProgress * phaseWeights.analysis) +
+                                (implementationProgress * phaseWeights.implementation) +
+                                (testingProgress * phaseWeights.testing) +
+                                (deploymentProgress * phaseWeights.deployment) +
+                                (operationProgress * phaseWeights.operation);
+            
+            overallProgress = Math.round(overallProgress);
             document.getElementById('overall-progress').textContent = `${overallProgress}%`;
 
+            // 현재 진행 단계 및 진행률 표시
+            // 2025년 현재 기준으로 실제 진행 중인 단계 판단
             let currentPhaseName = '계획';
+            let currentPhaseProgress = 0;
+            
+            // 실제 날짜 기반으로 현재 단계를 판단하는 로직
             for (const phase of projectData.phases) {
                 const phaseStart = new Date(phase.plannedStart);
                 const phaseEnd = new Date(phase.plannedEnd);
                 if (today >= phaseStart && today <= phaseEnd) {
                     currentPhaseName = phase.name;
+                    currentPhaseProgress = phase.progress;
                     break;
                 }
             }
-            document.getElementById('current-phase').textContent = currentPhaseName;
+            
+            // 현재 진행 중인 단계의 진행률을 표시
+            if (currentPhaseName === '구현 단계') {
+                currentPhaseProgress = implementationProgress;
+            }
+            
+            document.getElementById('current-phase').textContent = `${currentPhaseName} (${currentPhaseProgress}%)`;
 
             // Update the progress of the implementation phase based on the calculated value
-            const implementationPhase = projectData.phases.find(p => p.id === 'implementation');
-            if (implementationPhase) {
-                implementationPhase.progress = overallProgress;
+            if (currentImplementationPhase) {
+                currentImplementationPhase.progress = implementationProgress;
             }
         }
 
