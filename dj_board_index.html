@@ -196,10 +196,12 @@
             const deploymentPhase = projectData.phases.find(p => p.id === 'deployment');
             const endDate = new Date(deploymentPhase.plannedEnd);
             
-            // 더 정확한 월 수 계산
-            const monthDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                            (endDate.getMonth() - startDate.getMonth());
-            document.getElementById('total-duration').textContent = `${monthDiff} 개월`;
+            // 총 기간(개월) = (종료일 - 시작일) 일수를 30일=1개월로 환산해 반올림
+            // - 예: 약 11.7개월이면 12개월로 표시
+            const msPerDay = 1000 * 60 * 60 * 24;
+            const dayDiff = Math.max(0, Math.round((endDate - startDate) / msPerDay));
+            const approxMonths = Math.round(dayDiff / 30);
+            document.getElementById('total-duration').textContent = `${approxMonths} 개월`;
 
             const totalEffort = projectData.details.implementation.modules.reduce((sum, module) => sum + module.effort, 0);
             const completedEffort = projectData.details.implementation.modules.reduce((sum, module) => sum + (module.effort * module.progress / 100), 0);
