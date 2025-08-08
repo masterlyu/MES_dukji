@@ -89,7 +89,7 @@
         <main>
             <section id="overview" class="mb-12 bg-white p-6 rounded-xl shadow-md">
                 <h2 class="text-2xl font-bold mb-4 text-slate-800 border-b pb-2">프로젝트 개요</h2>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
                     <div class="bg-slate-50 p-4 rounded-lg">
                         <h3 class="text-lg font-semibold text-slate-500">총 프로젝트 기간</h3>
                         <p id="total-duration" class="text-2xl font-bold text-teal-600"></p>
@@ -102,10 +102,6 @@
                     <div class="bg-slate-50 p-4 rounded-lg">
                         <h3 class="text-lg font-semibold text-slate-500">현재 진행 단계</h3>
                         <p id="current-phase" class="text-2xl font-bold text-teal-600"></p>
-                    </div>
-                    <div class="bg-slate-50 p-4 rounded-lg">
-                        <h3 class="text-lg font-semibold text-slate-500">구현 단계 진행률</h3>
-                        <p id="implementation-progress" class="text-2xl font-bold text-teal-600"></p>
                     </div>
                 </div>
             </section>
@@ -215,7 +211,7 @@
             const implementationEnd = new Date('2026-01-31');
             const totalImplementationDays = Math.round((implementationEnd - implementationStart) / (1000 * 60 * 60 * 24));
             
-            // 현재 날짜 기준으로 진행률 계산 (2024년 현재는 0%로 시작)
+            // 현재 날짜 기준으로 진행률 계산
             let implementationProgress = 0;
             if (today >= implementationStart && today <= implementationEnd) {
                 const elapsedDays = Math.round((today - implementationStart) / (1000 * 60 * 60 * 24));
@@ -223,8 +219,6 @@
             } else if (today > implementationEnd) {
                 implementationProgress = 100;
             }
-            
-            document.getElementById('implementation-progress').textContent = `${implementationProgress}%`;
 
             // 전체 프로젝트 진행률 계산 (모든 단계의 가중 평균)
             const phaseWeights = {
@@ -274,6 +268,7 @@
             document.getElementById('current-phase').textContent = `${currentPhaseName} (${currentPhaseProgress}%)`;
 
             // Update the progress of the implementation phase based on the calculated value
+            const currentImplementationPhase = projectData.phases.find(p => p.id === 'implementation');
             if (currentImplementationPhase) {
                 currentImplementationPhase.progress = implementationProgress;
             }
