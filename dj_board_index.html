@@ -157,7 +157,7 @@
                         { priority: '07', name: '생산관리', effort: 10, plannedStart: '2025-12-01', plannedEnd: '2025-12-31', progress: 0, note: '해당 모듈별 구현 부분은 2026.01.31까지 완료 예정' },
                         { priority: '08', name: '회계관리', effort: 7, plannedStart: '2025-12-01', plannedEnd: '2025-12-31', progress: 0, note: '-' },
                         { priority: '09', name: '재고관리', effort: 19, plannedStart: '2026-01-01', plannedEnd: '2026-01-31', progress: 0, note: '-' },
-                        { priority: '10', name: '설계관리', effort: 12, plannedStart: '2026-01-01', plannedEnd: '2026-01-31', progress: 0, note: '-' },
+                        { priority: '10', name: '설비관리', effort: 12, plannedStart: '2026-01-01', plannedEnd: '2026-01-31', progress: 0, note: '-' },
                     ]
                 },
                 testing: {
@@ -182,7 +182,7 @@
             }
         };
 
-        const today = new Date('2025-08-08');
+        const today = new Date();
 
         document.addEventListener('DOMContentLoaded', () => {
             setupOverview();
@@ -322,7 +322,8 @@
                                     if (label === '계획') {
                                         return `계획 기간: ${plannedStart} ~ ${plannedEnd}`;
                                     } else if (label === '실제' && progress > 0) {
-                                        return `진행률: ${progress}% (${plannedStart} 기준)`;
+                                        const todayStr = today.toLocaleDateString();
+                                        return `진행률: ${progress}% (기준일: ${todayStr})`;
                                     }
                                     return '';
                                 }
