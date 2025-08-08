@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>덕지산업 MES 프로젝트 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Slate Gray with Teal Accent -->
+    <!-- Application Structure Plan: The application is designed as an interactive dashboard. The primary structure includes: 1. A header with key project metrics including overall progress. 2. A main interactive Gantt chart visualizing both planned and actual timelines for the five major project phases, providing a high-level comparison. 3. A dynamic detail section below the chart that updates based on user interaction, containing tabs for each phase. 4. Within the '구현 (Implementation)' phase detail, a secondary bar chart shows the actual vs. planned effort ('공수') for each module, and a table displays module specifics with their progress. This top-down (overview to detail) structure with a planned vs. actual overlay was chosen to allow users to quickly identify schedule variances at a high level and then drill down to see detailed progress, which is the most critical information for project management. -->
+    <!-- Visualization & Content Choices: 
+        - Project Timeline (Planned vs. Actual): Report Info -> Project phase start/end dates (planned) and new actual progress rates. Goal -> Compare planned duration vs. actual progress rate. Viz -> Paired Horizontal Bar Chart (simulating a Gantt chart). The planned bar shows the full duration, and the actual bar shows the duration equivalent of the progress percentage. Interaction -> Hover for details, click to filter details below. Justification -> This is the most effective way to visualize schedule variance directly on a timeline, directly addressing the user's request to see planned as duration and actual as a rate. Library -> Chart.js.
+        - Implementation Effort & Progress: Report Info -> '공수' (man-days) for each module and new progress percentages. Goal -> Compare planned effort and show progress. Viz -> Bar Chart showing progress percentage per module. Interaction -> Click a bar to highlight and view module details. Justification -> A bar chart is ideal for comparing discrete quantitative values like progress. Library -> Chart.js.
+        - Phase Details: Report Info -> Task lists, dates, and notes for each phase. Goal -> Inform. Presentation -> Dynamic HTML Table with a new '진행률' (progress rate) column. Interaction -> Table content updates when a phase is selected. Justification -> Tables are effective for presenting structured, detailed information and are now enhanced with progress data. Library/Method -> Vanilla JS DOM manipulation.
+        - Key Metrics: Report Info -> Overall project start/end dates and new overall progress. Goal -> Inform at a glance. Presentation -> Styled stat cards. Interaction -> Current phase is dynamically highlighted. Justification -> Cards provide quick, digestible summaries. Library/Method -> HTML/Tailwind/JS.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f1f5f9;
+        }
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+        }
+        .nav-button.active {
+            background-color: #0d9488;
+            color: white;
+            font-weight: 700;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            position: relative;
+        }
+        .status-complete { 
+            background-color: #4ade80;
+            border: 2px solid #22c55e;
+        }
+        .status-inprogress { 
+            background-color: #fbbf24;
+            border: 2px solid #f59e0b;
+        }
+        .status-pending { 
+            background-color: #94a3b8;
+            border: 2px solid #64748b;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-slate-900">덕지산업 MES 프로젝트 대시보드</h1>
+            <p class="text-slate-600 mt-2">프로젝트 전체 일정 및 진행 현황을 시각적으로 분석합니다.</p>
+        </header>
+
+        <main>
+            <section id="overview" class="mb-12 bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-4 text-slate-800 border-b pb-2">프로젝트 개요</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-center">
+                    <div class="bg-slate-50 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-slate-500">총 프로젝트 기간</h3>
+                        <p id="total-duration" class="text-2xl font-bold text-teal-600"></p>
+                    </div>
+                     <div class="bg-slate-50 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-slate-500">전체 공수</h3>
+                        <p class="text-2xl font-bold text-teal-600">144 M/D</p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-slate-500">전체 진행률</h3>
+                        <p id="overall-progress" class="text-2xl font-bold text-teal-600"></p>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-lg">
+                        <h3 class="text-lg font-semibold text-slate-500">현재 진행 단계</h3>
+                        <p id="current-phase" class="text-2xl font-bold text-teal-600"></p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="timeline" class="mb-12 bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-4 text-slate-800 border-b pb-2">계획 대비 실제 진행 타임라인</h2>
+                <p class="text-slate-600 mb-4">파란색 막대는 **계획 기간**을, 초록색 막대는 **현재 진행률**을 기반으로 한 기간을 나타냅니다. 막대를 클릭하여 각 단계별 상세 내용을 확인하세요.</p>
+                <div class="chart-container">
+                    <canvas id="ganttChart"></canvas>
+                </div>
+            </section>
+
+            <section id="details" class="bg-white p-6 rounded-xl shadow-md">
+                <h2 class="text-2xl font-bold mb-4 text-slate-800 border-b pb-2">단계별 상세 내용</h2>
+                <div id="nav-buttons" class="flex flex-wrap gap-2 mb-6">
+                </div>
+                <div id="details-content">
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const projectData = {
+            phases: [
+                { id: 'analysis', name: '분석 단계', plannedStart: '2025-04-10', plannedEnd: '2025-07-31', progress: 100 },
+                { id: 'implementation', name: '구현 단계', plannedStart: '2025-08-01', plannedEnd: '2026-01-31', progress: 0 },
+                { id: 'testing', name: '시험 단계', plannedStart: '2026-02-01', plannedEnd: '2026-03-20', progress: 0 },
+                { id: 'deployment', name: '전환 단계', plannedStart: '2026-03-28', plannedEnd: '2026-03-29', progress: 0 },
+                { id: 'operation', name: '운영 단계', plannedStart: '2026-03-30', plannedEnd: '2026-04-30', progress: 0 } 
+            ],
+            details: {
+                analysis: {
+                    title: '분석 단계 (Analysis Phase)',
+                    tasks: [
+                        { name: '현황 분석', start: '2025-04-10', end: '2025-07-31', status: '완료', progress: 100 },
+                        { name: '요구사항 분석', start: '2025-04-10', end: '2025-07-31', status: '완료', progress: 100 },
+                        { name: '개선업무 분석', start: '2025-04-10', end: '2025-07-31', status: '완료', progress: 100 }
+                    ]
+                },
+                implementation: {
+                    title: '구현 단계 (Implementation Phase)',
+                    modules: [
+                        { priority: '01', name: '기본정보', effort: 17, plannedStart: '2025-08-01', plannedEnd: '2025-08-31', progress: 20, note: '초기 작업 시간이 많이 소요될 것으로 예상' },
+                        { priority: '02', name: '인사급여', effort: 23, plannedStart: '2025-08-01', plannedEnd: '2025-08-31', progress: 15, note: '기본정보, 인사급여, 권리업무는 2025.09.30 완료 예정' },
+                        { priority: '03', name: '관리업무', effort: 7, plannedStart: '2025-09-01', plannedEnd: '2025-09-30', progress: 0, note: '-' },
+                        { priority: '04', name: '영업관리', effort: 15, plannedStart: '2025-10-01', plannedEnd: '2025-10-31', progress: 0, note: '-' },
+                        { priority: '05', name: '구매관리', effort: 18, plannedStart: '2025-11-01', plannedEnd: '2025-11-30', progress: 0, note: '-' },
+                        { priority: '06', name: '전자결재', effort: 16, plannedStart: '2025-11-01', plannedEnd: '2025-11-30', progress: 0, note: '-' },
+                        { priority: '07', name: '생산관리', effort: 10, plannedStart: '2025-12-01', plannedEnd: '2025-12-31', progress: 0, note: '해당 모듈별 구현 부분은 2026.01.31까지 완료 예정' },
+                        { priority: '08', name: '회계관리', effort: 7, plannedStart: '2025-12-01', plannedEnd: '2025-12-31', progress: 0, note: '-' },
+                        { priority: '09', name: '재고관리', effort: 19, plannedStart: '2026-01-01', plannedEnd: '2026-01-31', progress: 0, note: '-' },
+                        { priority: '10', name: '설계관리', effort: 12, plannedStart: '2026-01-01', plannedEnd: '2026-01-31', progress: 0, note: '-' },
+                    ]
+                },
+                testing: {
+                    title: '시험 단계 (Testing Phase)',
+                    tasks: [
+                        { name: '단위테스트', start: '2026-02-01', end: '2026-02-28', status: '예정', progress: 0 },
+                        { name: '통합테스트', start: '2026-03-01', end: '2026-03-20', status: '예정', progress: 0 }
+                    ]
+                },
+                deployment: {
+                    title: '전환 단계 (Deployment Phase)',
+                    tasks: [
+                        { name: '시스템 전환', start: '2026-03-28', end: '2026-03-29', status: '예정', progress: 0, note: '2026.03.27(금) 24시에 마감 / 이후 2026.03.28-2026.03.29 이틀간 데이터 마이그레이션 작업 진행' }
+                    ]
+                },
+                operation: {
+                    title: '운영 단계 (Operation Phase)',
+                    tasks: [
+                        { name: '시스템 운영', start: '2026-03-30', end: '지속', status: '예정', progress: 0, note: '2026.03.30 정상적으로 본 시스템에 적용 및 이후 모니터링 진행' }
+                    ]
+                }
+            }
+        };
+
+        const today = new Date('2025-08-08');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setupOverview();
+            renderGanttChart();
+            renderNavButtons();
+            showDetails('implementation');
+        });
+
+        let currentGanttChart = null;
+        let currentImplementationChart = null;
+
+        function setupOverview() {
+            const startDate = new Date(projectData.phases[0].plannedStart);
+            const deploymentPhase = projectData.phases.find(p => p.id === 'deployment');
+            const endDate = new Date(deploymentPhase.plannedEnd);
+            
+            // 더 정확한 월 수 계산
+            const monthDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                            (endDate.getMonth() - startDate.getMonth());
+            document.getElementById('total-duration').textContent = `${monthDiff} 개월`;
+
+            const totalEffort = projectData.details.implementation.modules.reduce((sum, module) => sum + module.effort, 0);
+            const completedEffort = projectData.details.implementation.modules.reduce((sum, module) => sum + (module.effort * module.progress / 100), 0);
+            const overallProgress = Math.round((completedEffort / totalEffort) * 100);
+            document.getElementById('overall-progress').textContent = `${overallProgress}%`;
+
+            let currentPhaseName = '계획';
+            for (const phase of projectData.phases) {
+                const phaseStart = new Date(phase.plannedStart);
+                const phaseEnd = new Date(phase.plannedEnd);
+                if (today >= phaseStart && today <= phaseEnd) {
+                    currentPhaseName = phase.name;
+                    break;
+                }
+            }
+            document.getElementById('current-phase').textContent = currentPhaseName;
+
+            // Update the progress of the implementation phase based on the calculated value
+            const implementationPhase = projectData.phases.find(p => p.id === 'implementation');
+            if (implementationPhase) {
+                implementationPhase.progress = overallProgress;
+            }
+        }
+
+        function renderGanttChart() {
+            // 이전 차트 정리
+            if (currentGanttChart) {
+                currentGanttChart.destroy();
+            }
+
+            const ctx = document.getElementById('ganttChart').getContext('2d');
+            
+            const plannedData = projectData.phases.map(p => [new Date(p.plannedStart), new Date(p.plannedEnd)]);
+            const actualData = projectData.phases.map(p => {
+                if (p.progress > 0) {
+                    const plannedDurationMs = new Date(p.plannedEnd) - new Date(p.plannedStart);
+                    const actualDurationMs = plannedDurationMs * (p.progress / 100);
+                    const actualEnd = new Date(new Date(p.plannedStart).getTime() + actualDurationMs);
+                    return [new Date(p.plannedStart), actualEnd];
+                }
+                return null;
+            });
+
+            const data = {
+                labels: projectData.phases.map(p => p.name),
+                datasets: [
+                    {
+                        label: '계획',
+                        data: plannedData,
+                        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        borderWidth: 1,
+                        barPercentage: 0.6,
+                        categoryPercentage: 0.7,
+                        borderSkipped: false,
+                    },
+                     {
+                        label: '실제',
+                        data: actualData,
+                        backgroundColor: 'rgba(13, 148, 136, 0.8)',
+                        borderColor: 'rgba(13, 148, 136, 1)',
+                        borderWidth: 1,
+                        barPercentage: 0.6,
+                        categoryPercentage: 0.7,
+                        borderSkipped: false,
+                    }
+                ]
+            };
+
+            currentGanttChart = new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'month',
+                                displayFormats: {
+                                    month: 'yyyy-MM'
+                                }
+                            },
+                            min: '2025-04-01',
+                            max: '2026-05-01',
+                            grid: {
+                                display: true,
+                                color: 'rgba(200, 200, 200, 0.1)'
+                            },
+                            title: {
+                                display: true,
+                                text: '프로젝트 기간'
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const phaseIndex = context.dataIndex;
+                                    const phase = projectData.phases[phaseIndex];
+                                    const plannedStart = new Date(phase.plannedStart).toLocaleDateString();
+                                    const plannedEnd = new Date(phase.plannedEnd).toLocaleDateString();
+                                    const progress = phase.progress;
+                                    const label = context.dataset.label;
+
+                                    if (label === '계획') {
+                                        return `계획 기간: ${plannedStart} ~ ${plannedEnd}`;
+                                    } else if (label === '실제' && progress > 0) {
+                                        return `진행률: ${progress}% (${plannedStart} 기준)`;
+                                    }
+                                    return '';
+                                }
+                            }
+                        }
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const phaseIndex = elements[0].index;
+                            const phaseId = projectData.phases[phaseIndex].id;
+                            showDetails(phaseId);
+                            document.getElementById('details').scrollIntoView({ behavior: 'smooth' });
+                        }
+                    }
+                }
+            });
+
+            // 접근성을 위한 설명 추가
+            const chartContainer = document.querySelector('.chart-container');
+            const description = document.createElement('p');
+            description.className = 'sr-only';
+            description.textContent = '프로젝트 각 단계별 계획 대비 실제 진행 현황을 보여주는 차트입니다.';
+            chartContainer.appendChild(description);
+        }
+
+        function renderNavButtons() {
+            const navContainer = document.getElementById('nav-buttons');
+            navContainer.innerHTML = '';
+            projectData.phases.forEach(phase => {
+                const button = document.createElement('button');
+                button.textContent = phase.name;
+                button.className = 'nav-button px-4 py-2 rounded-md text-sm font-medium bg-slate-100 hover:bg-slate-200';
+                button.dataset.phaseId = phase.id;
+                button.onclick = () => showDetails(phase.id);
+                navContainer.appendChild(button);
+            });
+        }
+
+        function showDetails(phaseId) {
+            const contentContainer = document.getElementById('details-content');
+            const phaseDetail = projectData.details[phaseId];
+            
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.phaseId === phaseId);
+            });
+
+            if (phaseId === 'implementation') {
+                contentContainer.innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div>
+                            <h3 class="text-xl font-semibold mb-4">${phaseDetail.title} - 모듈별 진행률</h3>
+                            <div class="h-96"><canvas id="implementationChart"></canvas></div>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold mb-4">모듈 상세 정보</h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm text-left text-slate-500">
+                                    <thead class="text-xs text-slate-700 uppercase bg-slate-50">
+                                        <tr>
+                                            <th scope="col" class="px-4 py-3">우선순위</th>
+                                            <th scope="col" class="px-4 py-3">모듈명</th>
+                                            <th scope="col" class="px-4 py-3">기간</th>
+                                            <th scope="col" class="px-4 py-3">진행률</th>
+                                            <th scope="col" class="px-4 py-3">비고</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${phaseDetail.modules.map(m => `
+                                            <tr class="bg-white border-b">
+                                                <td class="px-4 py-3 font-medium text-slate-900">${m.priority}</td>
+                                                <td class="px-4 py-3">${m.name}</td>
+                                                <td class="px-4 py-3">${m.plannedStart.substring(5)} ~ ${m.plannedEnd.substring(5)}</td>
+                                                <td class="px-4 py-3">${m.progress}%</td>
+                                                <td class="px-4 py-3">${m.note}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                renderImplementationChart();
+            } else {
+                contentContainer.innerHTML = `
+                    <h3 class="text-xl font-semibold mb-4">${phaseDetail.title}</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-slate-500">
+                            <thead class="text-xs text-slate-700 uppercase bg-slate-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3">작업 내용</th>
+                                    <th scope="col" class="px-6 py-3">시작일</th>
+                                    <th scope="col" class="px-6 py-3">완료일</th>
+                                    <th scope="col" class="px-6 py-3">상태</th>
+                                    <th scope="col" class="px-6 py-3">진행률</th>
+                                    <th scope="col" class="px-6 py-3">비고</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${phaseDetail.tasks.map(t => {
+                                    let statusClass = 'status-pending';
+                                    if(t.status === '완료') statusClass = 'status-complete';
+                                    else if(t.status === '진행중') statusClass = 'status-inprogress';
+                                    return `
+                                    <tr class="bg-white border-b">
+                                        <td class="px-6 py-4 font-medium text-slate-900">${t.name}</td>
+                                        <td class="px-6 py-4">${t.start}</td>
+                                        <td class="px-6 py-4">${t.end}</td>
+                                        <td class="px-6 py-4"><span class="status-dot ${statusClass}"></span>${t.status}</td>
+                                        <td class="px-6 py-4">${t.progress}%</td>
+                                        <td class="px-6 py-4">${t.note || '-'}</td>
+                                    </tr>
+                                `}).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        }
+
+        function renderImplementationChart() {
+            // 이전 차트 정리
+            if (currentImplementationChart) {
+                currentImplementationChart.destroy();
+            }
+
+            const ctx = document.getElementById('implementationChart').getContext('2d');
+            const modules = projectData.details.implementation.modules;
+            const data = {
+                labels: modules.map(m => m.name),
+                datasets: [{
+                    label: '진행률 (%)',
+                    data: modules.map(m => m.progress),
+                    backgroundColor: 'rgba(13, 148, 136, 0.7)',
+                    borderColor: 'rgba(13, 148, 136, 1)',
+                    borderWidth: 1
+                }]
+            };
+
+            currentImplementationChart = new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: '진행률 (%)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '모듈명'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // 접근성을 위한 설명 추가
+            const chartContainer = document.querySelector('#implementationChart').parentElement;
+            const description = document.createElement('p');
+            description.className = 'sr-only';
+            description.textContent = '각 모듈별 구현 진행률을 보여주는 막대 차트입니다.';
+            chartContainer.appendChild(description);
+        }
+
+    </script>
+</body>
+</html>
